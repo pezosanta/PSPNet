@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
@@ -86,9 +87,14 @@ class Bottleneck(nn.Module):
 
         if self.downsample is not None:
             residual = self.downsample(x)
-
+                    
         out += residual
         out = self.relu(out)
+    
+        print('resnetBlock')
+        print(out.shape)
+        print('downsample_connections')
+        print(residual.shape)
 
         return out
 
@@ -137,14 +143,31 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
+
+        print('resnet_conv')
+        print(x.shape)
+
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
+        print('resnet_avgpool')
+        print(x.shape)
+
+        print('MEMORY ALLOCATED')
+        print(torch.cuda.memory_allocated(torch.device('cuda:0'))/(1024**3))
         x = self.layer1(x)
+        print('MEMORY ALLOCATED')
+        print(torch.cuda.memory_allocated(torch.device('cuda:0'))/(1024**3))
         x = self.layer2(x)
+        print('MEMORY ALLOCATED')
+        print(torch.cuda.memory_allocated(torch.device('cuda:0'))/(1024**3))
         x_3 = self.layer3(x)
+        print('MEMORY ALLOCATED')
+        print(torch.cuda.memory_allocated(torch.device('cuda:0'))/(1024**3))
         x = self.layer4(x_3)
+        print('MEMORY ALLOCATED')
+        print(torch.cuda.memory_allocated(torch.device('cuda:0'))/(1024**3))
 
         #x = self.avgpool(x)
         #x = x.view(x.size(0), -1)
