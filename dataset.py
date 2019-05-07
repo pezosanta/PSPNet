@@ -1,148 +1,236 @@
-from PIL import Image
-from skimage import io
-from skimage import color
 import torch
 from torch.utils.data import Dataset, DataLoader
-import torchvision
-import torchvision.transforms.functional as F
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
+import random
+import time
+import _pickle as pickle
+from data_creator import DataCreator                        
+from data_creator import read_object
+from data_creator import create_mask_image
 
 
-########### Creating train, val, test datapaths ###########
+print(torch.__version__)
+print(torch.cuda.is_available())
 
-train_val_image_paths = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\images\train\*.jpg')
-train_val_mask_paths = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\color_labels\train\*.png')
+desktop_train_pickle_read_dir_0_3 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.3\\*.pkl')
+desktop_train_pickle_read_dir_0_4 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.4\\*.pkl')
+desktop_train_pickle_read_dir_0_5 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.5\\*.pkl')
+desktop_train_pickle_read_dir_0_6 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.6\\*.pkl')
+desktop_train_pickle_read_dir_0_8 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.8\\*.pkl')
+desktop_train_pickle_read_dir_1 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\1\\*.pkl')
+desktop_train_pickle_read_dir_1_5 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\1.5\\*.pkl')
+desktop_train_pickle_read_dir_2 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\2\\*.pkl')
+desktop_train_pickle_read_dirs = [desktop_train_pickle_read_dir_0_3,
+                            desktop_train_pickle_read_dir_0_4,
+                            desktop_train_pickle_read_dir_0_5,
+                            desktop_train_pickle_read_dir_0_6]
 
-# Creating 6000 train and 1000 val images/masks from the 7000 images in the train directories
-len_train_val_image_mask_paths = len(train_val_image_paths)
-train_size = 6/7
+train_pickle_read_dir_0_3 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/0.3/*.pkl')
+train_pickle_read_dir_0_4 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/0.4/*.pkl')
+train_pickle_read_dir_0_5 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/0.5/*.pkl')
+train_pickle_read_dir_0_6 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/0.6/*.pkl')
+train_pickle_read_dir_0_8 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/0.8/*.pkl')
+train_pickle_read_dir_1 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/1/*.pkl')
+train_pickle_read_dir_1_5 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/1.5/*.pkl')
+train_pickle_read_dir_2 = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/train/2/*.pkl')
+train_pickle_read_dirs = [train_pickle_read_dir_0_3,
+                            train_pickle_read_dir_0_4,
+                            train_pickle_read_dir_0_5,
+                            train_pickle_read_dir_0_6]
 
-train_image_paths = train_val_image_paths[:int(len_train_val_image_mask_paths*train_size)]
-train_mask_paths = train_val_mask_paths[:int(len_train_val_image_mask_paths*train_size)]
+desktop_val_pickle_read_dir = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\val\*.pkl')
+val_pickle_read_dir = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/val/*.pkl')
 
-val_image_paths = train_val_image_paths[int(len_train_val_image_mask_paths*train_size):]
-val_mask_paths = train_val_mask_paths[int(len_train_val_image_mask_paths*train_size):]
-
-test_image_paths = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\images\val\*.jpg')
-test_mask_paths = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\color_labels\val\*.png')
-
-########### Checking the image paths ###########
-#print(len(train_image_paths))
-#print(len(train_mask_paths))
-#print(len(val_image_paths))
-#print(len(val_mask_paths))
-#print(len(test_image_paths))
-#print(len(test_mask_paths))
-
-#image = Image.open(train_image_paths[0])
-#image.show()
-#mask = Image.open(train_mask_paths[0])
-#mask.show()
-
-#for i in train_image_paths:
- #   print(i)
-
-#for j in train_mask_paths:
-#    print(j)
-
+desktop_test_pickle_read_dir = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\test\*.pkl')
+test_pickle_read_dir = glob.glob('/content/drive/My Drive/PSPNet/BDD100K/seg/pickle/test/*.pkl')
 
 ########### Creating the custom dataset ###########
 class Bdd100k_dataset(Dataset):
-    def __init__(self, image_paths, target_paths, train=True):
-        self.image_paths = image_paths
-        self.target_paths = target_paths
+    def __init__(self, mode, pickle_samples, batch_size):
+        self.mode = mode
+        self.pickle_samples = pickle_samples.copy()        
+        self.batch_size = batch_size
         self.device = torch.device('cuda:0')
 
-    def transform(self, image, mask):
-        
-        ### Resize, if ResNet requires it ###
-        #resize = torchvision.transforms.Resize(size=(520, 520))
-        #imagei = resize(image)
-        #maski = resize(mask)
+        if self.mode == 'Train':
+            self.sub_sample_number = len(pickle_samples[0]) * len(pickle_samples[0][0])
+        elif self.mode == 'Val':
+            self.sub_sample_number = len(pickle_samples)
+        elif self.mode == 'Test':
+            self.sub_sample_number = len(pickle_samples)
 
-        ### RGBA => RGB Conversion if neccessary ###
-        mask_rgb = mask
-        if mask.shape == (720, 1280, 4):
-            mask_rgb = color.rgba2rgb(mask)
-      
-        ### Transform Numpy Array to tensor ###
-        tensor_image = torch.tensor(image, dtype = torch.float)
-        tensor_mask = torch.tensor(mask_rgb, dtype = torch.float)
-                
-        return tensor_image, tensor_mask
+    def transform(self, pickle_image, pickle_mask):
+                      
+        cuda_tensor_image = (pickle_image.type(torch.float32)/255.0).to(device = self.device)             #dtype = torch.cuda.FloatTensor,
+        
+        one_hot_mask = (np.arange(20) == pickle_mask[...,np.newaxis]).astype(np.uint8)
+        cuda_tensor_mask = torch.clamp(torch.abs(torch.tensor(one_hot_mask, dtype = torch.float32).permute(2,0,1)), min = 1e-8, max = 1.0 - 1e-8).to(device = self.device)
+        
+        #checkpoint = time.time()
+        #print(checkpoint - start)
+                       
+        return cuda_tensor_image, cuda_tensor_mask
 
     def __getitem__(self, index):
-        image = io.imread(self.image_paths[index])
-        mask = io.imread(self.target_paths[index])
-        x, y = self.transform(image, mask)
-        
-        #return {'image':x, 'mask':y}
+
+        if self.mode == 'Train':
+            obj = self.get_train_item(index = index)
+        elif (self.mode == 'Val' or self.mode == 'Test'):
+            obj = read_object(self.pickle_samples[index])
+        else:
+            print('Wrong mode! Please select from the following: Train, Val, Test')
                 
-        return x, y
+        print(obj.name)
+        
+        pickle_image = obj.image
+        pickle_mask = obj.mask
+        
+        cuda_tensor_image, cuda_tensor_mask = self.transform(pickle_image, pickle_mask)
+        
+        return cuda_tensor_image, cuda_tensor_mask
 
-    def __len__(self):
-        return len(self.image_paths)
+    def get_train_item(self, index):
+        current_pickle_samples = self.pickle_samples[index // self.sub_sample_number]        
+        current_index = int(index - (index // self.sub_sample_number) * self.sub_sample_number)
+        current_sub_index_0 = int(current_index // self.batch_size)
+        current_sub_index_1 = int(current_index % self.batch_size)
+        
+        obj = read_object(current_pickle_samples[current_sub_index_0][current_sub_index_1])
 
+        return obj
+                
+    def __len__(self): 
+        if self.mode == 'Train':
+            return len(self.pickle_samples) * len(self.pickle_samples[0]) * len(self.pickle_samples[0][0])
+
+        elif (self.mode == 'Val' or self.mode == 'Test'):
+            return self.sub_sample_number
+            
+
+def create_train_samples(batch_size, pickle_read_dirs = train_pickle_read_dirs):
+    
+    shuffeled_0_3_dir = pickle_read_dirs[0].copy()
+    shuffeled_0_4_dir = pickle_read_dirs[1].copy()
+    shuffeled_0_5_dir = pickle_read_dirs[2].copy()
+    shuffeled_0_6_dir = pickle_read_dirs[3].copy()
+    
+    random.shuffle(shuffeled_0_3_dir)
+    random.shuffle(shuffeled_0_4_dir)
+    random.shuffle(shuffeled_0_5_dir)
+    random.shuffle(shuffeled_0_6_dir)
+    
+    train_samples_0_3 = [shuffeled_0_3_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_0_3_dir)), batch_size)]
+    train_samples_0_4 = [shuffeled_0_4_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_0_4_dir)), batch_size)]
+    train_samples_0_5 = [shuffeled_0_5_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_0_5_dir)), batch_size)]
+    train_samples_0_6 = [shuffeled_0_6_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_0_6_dir)), batch_size)]
+    
+    train_samples = [train_samples_0_6, train_samples_0_3, train_samples_0_4, train_samples_0_5]
+    
+    return train_samples
+
+def create_val_samples(batch_size, pickle_read_dirs = val_pickle_read_dir):
+    
+    shuffeled_val_dir = pickle_read_dirs.copy()
+        
+    random.shuffle(shuffeled_val_dir)
+
+    #val_samples = [shuffeled_val_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_val_dir)), batch_size)]
+            
+    return shuffeled_val_dir
+
+def create_test_samples(batch_size, pickle_read_dirs = test_pickle_read_dir):
+    
+    shuffeled_test_dir = pickle_read_dirs.copy()
+        
+    random.shuffle(shuffeled_test_dir)
+
+    #test_samples = [shuffeled_test_dir[i:i+batch_size] for i in range(0, int(len(shuffeled_test_dir)), batch_size)]
+            
+    return shuffeled_test_dir
+    
+        
+    
 
 
 
 if __name__ == "__main__":
+    '''
+    print(len(desktop_train_pickle_read_dir_0_3))
+    print(len(desktop_train_pickle_read_dir_0_4))
+    print(len(desktop_train_pickle_read_dir_0_5))
+    print(len(desktop_train_pickle_read_dir_0_6))
+    print(len(desktop_val_pickle_read_dir))
+    print(len(desktop_test_pickle_read_dir))
 
-    ########### Creating the DataLoaders ###########
-    train_dataset = Bdd100k_dataset(train_image_paths, train_mask_paths)
-    #print(len(train_dataset))
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=1)
+    batch_size = 4
 
-    val_dataset = Bdd100k_dataset(val_image_paths, val_mask_paths)
-    #print(len(val_dataset))
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=True, num_workers=1)
+    train_samples = create_train_samples(batch_size = batch_size, pickle_read_dirs = desktop_train_pickle_read_dirs)
+    for i in range(len(train_samples)):
+        print(len(train_samples[i]))
+        print(len(train_samples[i][i]))
 
-    test_dataset = Bdd100k_dataset(test_image_paths, test_mask_paths)
-    #print(len(test_dataset))
-    test_loader = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=1)
+    val_samples = create_val_samples(batch_size = batch_size, pickle_read_dirs = desktop_val_pickle_read_dir)
+    print(len(val_samples))
 
-    ########### Checking the Dimensions ###########
-    #for i in range(len(train_dataset)):
-    #    sample = train_dataset[i]
+    test_samples = create_test_samples(batch_size = batch_size, pickle_read_dirs = desktop_test_pickle_read_dir)
+    print(len(test_samples))
 
-    #    print(i, sample['image'].shape, sample['mask'].shape)
+    train_dataset = Bdd100k_dataset(mode = 'Train', pickle_samples = train_samples, batch_size = batch_size)
+    print(len(train_dataset))
 
+    val_dataset = Bdd100k_dataset(mode = 'Val', pickle_samples = val_samples, batch_size = batch_size)
+    print(len(val_dataset))
 
-    ########### Testing DataLoaders ###########        
-    images, masks = next(iter(train_loader))
+    test_dataset = Bdd100k_dataset(mode = 'Test', pickle_samples = test_samples, batch_size = batch_size)
+    print(len(test_dataset))
 
-    #out = torchvision.utils.make_grid(images)  
+    train_loader = DataLoader(train_dataset, batch_size = batch_size, shuffle = False)
+    print(len(train_loader))
+
+    val_loader = DataLoader(val_dataset, batch_size = batch_size, shuffle = False)
+    print(len(val_loader))
+
+    test_loader = DataLoader(val_dataset, batch_size = batch_size, shuffle = False)
+    print(len(test_loader))    
+
     
-    print(images[0].shape, masks.shape)
     
-    DLTNIT = plt.figure('DataLoader Tensor => Numpy Image test')            # Something is wrong with the plotted pictures
-    image_numpy = images[0].numpy()    
+    
+    it = iter(test_loader)
+    
+    
+    for i in range(250):
+        images, masks = next(it)
+        print(i)
+        print(images.shape)
+        print(masks.shape)
+    '''
+     
+    
+    '''
+    DLTNIT = plt.figure('DataLoader Tensor => Numpy Image test')            
+    image_numpy = images[0].cpu().detach().permute(1, 2, 0).numpy()    
     print('DataLoader Tensor => Numpy Image test: ', image_numpy.shape)
     plt.imshow(image_numpy)
     DLTNIT.show()
+    
 
     DLTNMT = plt.figure('DataLoader Tensor => Numpy Mask test')
-    mask_numpy = masks[0].numpy()
+    mask_complex = masks[0].cpu().detach()
+    mask_image = create_mask_image(mask_complex)
+    mask_numpy = mask_image.numpy()
     print('DataLoader Tensor => Numpy Mask test: ', mask_numpy.shape)
-    plt.imshow(mask_numpy)
+    plt.imshow(mask_numpy/255.0)
     DLTNMT.show()
-    
-    
-    ########### Testing RGBA => RGB Conversion ###########
-    MTBC = plt.figure('Mask test before RGBA => RGB conversion')
-    mask_testing = io.imread(train_mask_paths[0])                   # RGBA mask image!
-    print('Mask test before RGBA => RGB conversion: ', mask_testing.shape)
-    plt.imshow(mask_testing)
-    MTBC.show()
 
-    MTAC = plt.figure('Mask test after RGBA => RGB conversion')
-    mask_testing_rgb = mask_testing
-    if mask_testing.shape == (720, 1280, 4):                        # Conversion with scikit-image
-            mask_testing_rgb = color.rgba2rgb(mask_testing)
-    print('Mask test after RGBA => RGB conversion: ', mask_testing_rgb.shape)
-    plt.imshow(mask_testing_rgb)
-    MTAC.show()
-    
     plt.show()
+    
+    '''
+    
+
+   
+
+    
+    
