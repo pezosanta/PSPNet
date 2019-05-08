@@ -24,8 +24,8 @@ class PSPModule(nn.Module):
                        
         concat = torch.cat(priors, dim = 1)
 
-        print('concat')
-        print(concat.shape)
+        #print('concat')
+        #print(concat.shape)
 
         return self.relu(concat)
 
@@ -51,14 +51,14 @@ class PSPUpsample(nn.Module):
         p = self.batchnorm(p)
         p = self.relu(p)
 
-        print('final_conv')
-        print(p.shape)
+        #print('final_conv')
+        #print(p.shape)
 
         h, w = int(8 * x.size(2)), int(8 * x.size(3))
         p = F.upsample(input = p, size = (h, w), mode = 'bilinear')
 
-        print('upasmple')
-        print(p.shape)
+        #print('upasmple')
+        #print(p.shape)
 
         return p
 
@@ -77,8 +77,10 @@ class PSPNet(nn.Module):
 
     def forward(self, x):
         f, class_f = self.feats(x) 
-        print('intoPSP')
-        print(f.shape)
+        
+        #print('intoPSP')
+        #print(f.shape)
+
         p = self.psp(f)
         p = self.drop_1(p)
 
@@ -89,8 +91,8 @@ class PSPNet(nn.Module):
         auxiliary = self.aux_up(class_f)
         auxiliary = self.aux_classifier(auxiliary)
 
-        p = self.sigmoid(p)
-        auxiliary = self.sigmoid(auxiliary)
+        #p = self.sigmoid(p)
+        #auxiliary = self.sigmoid(auxiliary)
         
         
         return p, auxiliary
