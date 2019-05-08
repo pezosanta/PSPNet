@@ -11,8 +11,8 @@ from data_creator import read_object
 from data_creator import create_mask_image
 
 
-print(torch.__version__)
-print(torch.cuda.is_available())
+print('Torch version: ' + str(torch.__version__))
+print('GPU available: ' + str(torch.cuda.is_available()))
 
 desktop_train_pickle_read_dir_0_3 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.3\\*.pkl')
 desktop_train_pickle_read_dir_0_4 = glob.glob(r'C:\Users\Tony Stark\Desktop\Szakdolgozat\bdd100k\seg\pickle\train\\0.4\\*.pkl')
@@ -82,7 +82,7 @@ class Bdd100k_dataset(Dataset):
         else:
             print('Wrong mode! Please select from the following: Train, Val, Test')
                 
-        print(obj.name)
+        #print(obj.name)
         
         pickle_image = obj.image
         pickle_mask = obj.mask
